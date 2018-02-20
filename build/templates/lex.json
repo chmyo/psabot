@@ -1,0 +1,378 @@
+{
+ "Resources": {
+  "QNAInvokePermission": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Ref": "Arn"
+    },
+    "Principal": "lex.amazonaws.com"
+   }
+  },
+  "Lex": {
+   "Type": "AWS::CloudFormation::Stack",
+   "Properties": {
+    "TemplateURL": {
+     "Fn::Join": [
+      "/",
+      [
+       "https://s3.amazonaws.com",
+       {
+        "Ref": "BootstrapBucket"
+       },
+       {
+        "Ref": "BootstrapPrefix"
+       },
+       "templates/cfn-lex.json"
+      ]
+     ]
+    },
+    "Parameters": {
+     "BootstrapBucket": {
+      "Ref": "BootstrapBucket"
+     },
+     "BootstrapPrefix": {
+      "Ref": "BootstrapPrefix"
+     }
+    }
+   }
+  },
+  "QNASlot": {
+   "Type": "Custom::LexSlotType",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "Lex",
+      "Outputs.Arn"
+     ]
+    },
+    "enumerationValues": [
+     {
+      "value": "t is a chat bot"
+     },
+     {
+      "value": "what is a data warehouse"
+     },
+     {
+      "value": "what is coronary artery disease"
+     },
+     {
+      "value": "what is an electric vehicle"
+     },
+     {
+      "value": "tell me about amazon alexa"
+     },
+     {
+      "value": "tell me about body mass index"
+     },
+     {
+      "value": "tell me about healthy eating"
+     },
+     {
+      "value": "how do I know if I am a linux expert"
+     },
+     {
+      "value": "should I stop smoking"
+     },
+     {
+      "value": "how bad is excessive alcohol consumption"
+     },
+     {
+      "value": "do I get enough sleep"
+     },
+     {
+      "value": "tell me about cloud computing"
+     },
+     {
+      "value": "do I get enough exercise"
+     },
+     {
+      "value": "what is a good training program for windows"
+     },
+     {
+      "value": "is programming bad for you"
+     },
+     {
+      "value": "is bacon good for you"
+     },
+     {
+      "value": "what is a stack overflow"
+     },
+     {
+      "value": "should I use a document store"
+     },
+     {
+      "value": "give me advice on regular training"
+     },
+     {
+      "value": "what are the benfits of a cardio workout"
+     },
+     {
+      "value": "should I learn javascript programming"
+     },
+     {
+      "value": "is working in support good for my career"
+     },
+     {
+      "value": "where can i learn python"
+     },
+     {
+      "value": "how quickly will I recover from triple bypass surgery"
+     },
+     {
+      "value": "how quickly will I find employment after graduating"
+     },
+     {
+      "value": "how serious is a core dump"
+     },
+     {
+      "value": "what is a graphics processing unit"
+     },
+     {
+      "value": "what should I do when i see errors in the logfile"
+     },
+     {
+      "value": "tell me about serverless computing"
+     },
+     {
+      "value": "are computer viruses serious"
+     },
+     {
+      "value": "what is a slam dunk"
+     },
+     {
+      "value": "what is a first down"
+     },
+     {
+      "value": "what is normal blood pressure"
+     },
+     {
+      "value": "how many people live in Ireland"
+     },
+     {
+      "value": "how do I measure my volume"
+     },
+     {
+      "value": "what car is the fastest from zero to sixty"
+     },
+     {
+      "value": "tell me the benefits of green vegetables"
+     },
+     {
+      "value": "when should I call emergency services"
+     },
+     {
+      "value": "where is the nearest computer repair store"
+     },
+     {
+      "value": "when should I hire a consultant"
+     },
+     {
+      "value": "tell me about artificial intelligence"
+     },
+     {
+      "value": "does my family history affect my risk"
+     },
+     {
+      "value": "is is important to run regular backups"
+     },
+     {
+      "value": "do I have an unusual appearance"
+     },
+     {
+      "value": "is there a gene associated with musical ability"
+     },
+     {
+      "value": "what is data science"
+     },
+     {
+      "value": "how do I donate money"
+     },
+     {
+      "value": "how do I volunteer time"
+     },
+     {
+      "value": "tell me about the phrase life is good"
+     },
+     {
+      "value": "will robots rule the world"
+     },
+     {
+      "value": "hello"
+     },
+     {
+      "value": "goodbye"
+     },
+     {
+      "value": "help"
+     }
+    ]
+   }
+  },
+  "QNAIntent": {
+   "Type": "Custom::LexIntent",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "Lex",
+      "Outputs.Arn"
+     ]
+    },
+    "prefix": "fulfilment",
+    "sampleUtterances": [
+     "{slot}"
+    ],
+    "slots": [
+     {
+      "name": "slot",
+      "slotType": {
+       "Ref": "QNASlot"
+      },
+      "slotConstraint": "Optional",
+      "slotTypeVersion": "$LATEST"
+     }
+    ],
+    "fulfillmentActivity": {
+     "type": "CodeHook",
+     "codeHook": {
+      "uri": {
+       "Ref": "Arn"
+      },
+      "messageVersion": "1.0"
+     }
+    }
+   },
+   "DependsOn": "QNAInvokePermission"
+  },
+  "Bot": {
+   "Type": "Custom::LexBot",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "Lex",
+      "Outputs.Arn"
+     ]
+    },
+    "name": {
+     "Fn::Sub": "${AWS::StackName}-Bot"
+    },
+    "locale": "en-US",
+    "voiceId": "Joanna",
+    "childDirected": false,
+    "intents": [
+     {
+      "intentName": {
+       "Ref": "QNAIntent"
+      },
+      "intentVersion": "$LATEST"
+     }
+    ],
+    "clarificationPrompt": {
+     "maxAttempts": 5,
+     "messages": [
+      {
+       "content": "Sorry, can you please repeat that?",
+       "contentType": "PlainText"
+      }
+     ]
+    },
+    "abortStatement": {
+     "messages": [
+      {
+       "content": "Sorry, can you please repeat that?",
+       "contentType": "PlainText"
+      }
+     ]
+    }
+   }
+  },
+  "Alias": {
+   "Type": "Custom::LexAlias",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "Lex",
+      "Outputs.Arn"
+     ]
+    },
+    "botName": {
+     "Ref": "Bot"
+    },
+    "botVersion": "$LATEST"
+   },
+   "DependsOn": "Bot"
+  },
+  "Policy": {
+   "Type": "AWS::IAM::ManagedPolicy",
+   "Properties": {
+    "PolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Effect": "Allow",
+       "Action": [
+        "lex:PostContent",
+        "lex:PostText",
+        "polly:SynthesizeSpeech"
+       ],
+       "Resource": [
+        "*"
+       ]
+      }
+     ]
+    },
+    "Roles": [
+     {
+      "Ref": "Role"
+     }
+    ]
+   }
+  }
+ },
+ "Conditions": {},
+ "AWSTemplateFormatVersion": "2010-09-09",
+ "Description": "creates Lex QnABot",
+ "Mappings": {},
+ "Outputs": {
+  "Bot": {
+   "Value": {
+    "Ref": "Bot"
+   }
+  },
+  "BotAlias": {
+   "Value": {
+    "Ref": "Alias"
+   }
+  },
+  "Intent": {
+   "Value": {
+    "Ref": "QNAIntent"
+   }
+  },
+  "SlotType": {
+   "Value": {
+    "Ref": "QNASlot"
+   }
+  },
+  "Policy": {
+   "Value": {
+    "Ref": "Policy"
+   }
+  }
+ },
+ "Parameters": {
+  "Arn": {
+   "Type": "String"
+  },
+  "Role": {
+   "Type": "String"
+  },
+  "BootstrapBucket": {
+   "Type": "String"
+  },
+  "BootstrapPrefix": {
+   "Type": "String"
+  }
+ }
+}

@@ -1,0 +1,1531 @@
+{
+  "Resources": {
+    "API": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Ref": "AWS::StackName"
+        },
+        "Description": "An Api interface for the admin actions on the QNA bot"
+      },
+      "DependsOn": [
+        "InvokePermissionHealth",
+        "InvokePermissionHandler"
+      ]
+    },
+    "Deployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "API"
+        }
+      },
+      "DependsOn": [
+        "infoGet",
+        "RootOptions",
+        "RootPut",
+        "RootPost",
+        "RootGet",
+        "SearchOptions",
+        "SearchGet",
+        "QuestionOptions",
+        "QuestionHead",
+        "QuestionPut",
+        "QuestionDelete",
+        "BotPost",
+        "BotOptions",
+        "BotGetStatus",
+        "BotStatusOptions",
+        "BotGet",
+        "clientGet",
+        "HealthGet"
+      ]
+    },
+    "Stage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "DeploymentId": {
+          "Ref": "Deployment"
+        },
+        "RestApiId": {
+          "Ref": "API"
+        },
+        "StageName": "api",
+        "MethodSettings": [
+          {
+            "DataTraceEnabled": true,
+            "HttpMethod": "*",
+            "LoggingLevel": "INFO",
+            "ResourcePath": "/*"
+          }
+        ]
+      }
+    },
+    "ApiGatewayAccount": {
+      "Type": "AWS::ApiGateway::Account",
+      "Properties": {
+        "CloudWatchRoleArn": {
+          "Fn::GetAtt": [
+            "ApiGatewayCloudWatchLogsRole",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "RootOptions": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "ResponseTemplates": {
+                "application/json": ""
+              },
+              "StatusCode": "200"
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "ResourceId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "RootPut": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "PUT",
+        "Integration": {
+          "Type": "AWS",
+          "Credentials": {
+            "Fn::GetAtt": [
+              "ApiGatewayRole",
+              "Arn"
+            ]
+          },
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "StatusCode": 200
+            },
+            {
+              "StatusCode": 400
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"ADD\",",
+                  "\"Body\":$input.body",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Origin": true
+            },
+            "StatusCode": 200
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "RootGet": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "GET",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "StatusCode": 200,
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "#if($input.params('from') == 'all')",
+                  "{\"Command\":\"EXPORT\"}",
+                  "#else",
+                  "{",
+                  "\"Command\":\"LIST\",",
+                  "\"From\":\"$input.params('from')\",",
+                  "\"Filter\":\"$input.params('filter')\",",
+                  "\"Perpage\":\"$input.params('perpage')\"",
+                  "}",
+                  "#end"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "RequestParameters": {
+          "method.request.querystring.from": false,
+          "method.request.querystring.perpage": false,
+          "method.request.querystring.filter": false
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "RootPost": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "POST",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "StatusCode": 200
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"SAVE\"",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Origin": true
+            },
+            "StatusCode": 200
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "Question": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "ParentId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "{Id}",
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "QuestionOptions": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,OPTIONS,DELETE'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "ResponseTemplates": {
+                "application/json": ""
+              },
+              "StatusCode": "200"
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "ResourceId": {
+          "Ref": "Question"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "QuestionHead": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "HEAD",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "StatusCode": 200,
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            },
+            {
+              "SelectionPattern": ".*error.*",
+              "StatusCode": 404,
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"CHECK\",",
+                  "\"Id\":\"$util.urlDecode($input.params('Id'))\"",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Ref": "Question"
+        },
+        "RequestParameters": {
+          "method.request.path.Id": true
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 404,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "QuestionPut": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "PUT",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "StatusCode": 200
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"ADD\",",
+                  "\"Body\":$input.body",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Ref": "Question"
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Origin": true
+            },
+            "StatusCode": 200
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "QuestionDelete": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "DELETE",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "StatusCode": 200
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"DELETE\",",
+                  "\"Id\":\"$util.urlDecode($input.params('Id'))\"",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "RequestParameters": {
+          "method.request.path.Id": true
+        },
+        "ResourceId": {
+          "Ref": "Question"
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Origin": true
+            },
+            "StatusCode": 200
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "Search": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "ParentId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "search",
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "SearchOptions": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "ResponseTemplates": {
+                "application/json": ""
+              },
+              "StatusCode": "200"
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "ResourceId": {
+          "Ref": "Search"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "SearchGet": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "GET",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "StatusCode": 200,
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"SEARCH\",",
+                  "\"Query\":\"$input.params('query')\",",
+                  "\"From\":\"$input.params('from')\"",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "RequestParameters": {
+          "method.request.querystring.query": true,
+          "method.request.querystring.from": false
+        },
+        "ResourceId": {
+          "Ref": "Search"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "Info": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "ParentId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "info",
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "infoGet": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "GET",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "ResponseTemplates": {
+                "application/json": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "{",
+                      "\"region\":\"",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\",",
+                      "\"BotName\":\"",
+                      {
+                        "Ref": "Botname"
+                      },
+                      "\",",
+                      "\"PoolId\":\"",
+                      {
+                        "Ref": "PoolId"
+                      },
+                      "\",",
+                      "\"ClientId\":\"",
+                      {
+                        "Ref": "ClientId"
+                      },
+                      "\",",
+                      "\"UserPool\":\"",
+                      {
+                        "Ref": "UserPool"
+                      },
+                      "\",",
+                      "\"Id\":\"",
+                      {
+                        "Ref": "Id"
+                      },
+                      "\",",
+                      "\"ApiUrl\":\"https://${context.apiId}.execute-api.",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      ".amazonaws.com/api\"",
+                      "}"
+                    ]
+                  ]
+                }
+              },
+              "StatusCode": "200"
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "ResourceId": {
+          "Ref": "Info"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "InvokePermissionHandler": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "HandlerArn"
+        },
+        "Principal": "apigateway.amazonaws.com"
+      }
+    },
+    "InvokePermissionHealth": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "HealthArn"
+        },
+        "Principal": "apigateway.amazonaws.com"
+      }
+    },
+    "Client": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "ParentId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "client",
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "clientGet": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "GET",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "ResponseTemplates": {
+                "application/json": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "{\"iframeOrigin\":\"\",\"aws\":{\"cognitoPoolId\":\"",
+                      {
+                        "Ref": "PoolId"
+                      },
+                      "\",\"region\":\"",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\"},\"iframeConfig\":{\"lex\":{\"sessionAttributes\":{},\"botName\":\"",
+                      {
+                        "Ref": "Botname"
+                      },
+                      "\",\"pageTitle\":\"QnA Bot\",\"toolbarTitle\":\"QnA Bot\"},\"recorder\":{\"preset\":\"speech_recognition\"}}}"
+                    ]
+                  ]
+                }
+              },
+              "StatusCode": "200"
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "ResourceId": {
+          "Ref": "Client"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "Health": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "ParentId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "health",
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "HealthGet": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "GET",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HealthArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "StatusCode": 200
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"PING\"",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Ref": "Health"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "Policy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "execute-api:*"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${API}/api/*/*"
+                }
+              ]
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "Role"
+          }
+        ]
+      }
+    },
+    "ApiGatewayCloudWatchLogsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "apigateway.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ApiGatewayLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:DescribeLogGroups",
+                    "logs:DescribeLogStreams",
+                    "logs:PutLogEvents",
+                    "logs:GetLogEvents",
+                    "logs:FilterLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "apigateway.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ApiGatewayLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "HandlerArn"
+                    },
+                    {
+                      "Ref": "HealthArn"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Bot": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "ParentId": {
+          "Fn::GetAtt": [
+            "API",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "bot",
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "BotStatus": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "ParentId": {
+          "Ref": "Bot"
+        },
+        "PathPart": "status",
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "BotOptions": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "ResponseTemplates": {
+                "application/json": ""
+              },
+              "StatusCode": "200"
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "ResourceId": {
+          "Ref": "Bot"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "BotPost": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "POST",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "StatusCode": 200,
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"SAVE\"",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Ref": "Bot"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "BotGet": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "GET",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "StatusCode": 200,
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"BOT_INFO\",",
+                  "\"botname\":\"",
+                  {
+                    "Ref": "Botname"
+                  },
+                  "\",",
+                  "\"lambdaArn\":\"",
+                  {
+                    "Ref": "FulfilmentArn"
+                  },
+                  "\"",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Ref": "Bot"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "BotGetStatus": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "GET",
+        "Integration": {
+          "Type": "AWS",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                {
+                  "Ref": "HandlerArn"
+                },
+                "/invocations"
+              ]
+            ]
+          },
+          "IntegrationResponses": [
+            {
+              "StatusCode": 200,
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": {
+              "Fn::Join": [
+                "",
+                [
+                  "{",
+                  "\"Command\":\"BOT_STATUS\"",
+                  "}"
+                ]
+              ]
+            }
+          }
+        },
+        "ResourceId": {
+          "Ref": "BotStatus"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    },
+    "BotStatusOptions": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "ResponseTemplates": {
+                "application/json": ""
+              },
+              "StatusCode": "200"
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "ResourceId": {
+          "Ref": "BotStatus"
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          },
+          {
+            "StatusCode": 400
+          }
+        ],
+        "RestApiId": {
+          "Ref": "API"
+        }
+      }
+    }
+  },
+  "Conditions": {},
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Creates and api interface for the admin ui. Handler is the main lambda and the Health lambda is connected to the health endpoint. the keeps the health endpoint logs from flooding the main lambdas logs",
+  "Mappings": {},
+  "Outputs": {
+    "URL": {
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            {
+              "Ref": "API"
+            },
+            ".execute-api.",
+            {
+              "Ref": "AWS::Region"
+            },
+            ".amazonaws.com"
+          ]
+        ]
+      }
+    },
+    "Stage": {
+      "Value": "api"
+    },
+    "Id": {
+      "Value": {
+        "Ref": "API"
+      }
+    },
+    "RootId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "API",
+          "RootResourceId"
+        ]
+      }
+    },
+    "Name": {
+      "Value": {
+        "Ref": "AWS::StackName"
+      }
+    }
+  },
+  "Parameters": {
+    "UserPoolArn": {
+      "Type": "String"
+    },
+    "HandlerArn": {
+      "Type": "String"
+    },
+    "HealthArn": {
+      "Type": "String"
+    },
+    "Role": {
+      "Type": "String"
+    },
+    "PoolId": {
+      "Type": "String",
+      "Default": "NONE"
+    },
+    "ClientId": {
+      "Type": "String",
+      "Default": "NONE"
+    },
+    "UserPool": {
+      "Type": "String",
+      "Default": "NONE"
+    },
+    "Botname": {
+      "Type": "String",
+      "Default": "NONE"
+    },
+    "Id": {
+      "Type": "String",
+      "Default": "QnA Bot"
+    },
+    "Utterances": {
+      "Type": "String"
+    },
+    "FulfilmentArn": {
+      "Type": "String"
+    }
+  }
+}
